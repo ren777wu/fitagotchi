@@ -1,237 +1,119 @@
-package com.fitagotchi.app.ui.onboarding
+package com.fitagotchi.app.ui.respawn
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.fitagotchi.app.model.*
+import com.fitagotchi.app.ui.components.*
 import com.fitagotchi.app.ui.theme.Brutal
 import com.fitagotchi.app.ui.theme.brutal
-import kotlinx.coroutines.flow.distinctUntilChanged
+import com.fitagotchi.app.vm.AppViewModel
 
-private const val ROW_HEIGHT_DP = 44
 
-/** Vertical wheel used by the Birth Year screen. */
 @Composable
-fun VerticalWheel(
-    values: List<Int>,
-    selected: Int,
-    onSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-    format: (Int) -> String = { it.toString() }
-) {
-    val startIndex = values.indexOf(selected).coerceAtLeast(0)
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = startIndex)
-    val fling = rememberSnapFlingBehavior(lazyListState = listState)
+fun RespawnScreen(vm: AppViewModel) {
+    val choices = vm.respawnChoices()
+    val ownsOthers = vm.state.ownedPets.isNotEmpty()
+    var selected by remember { mutableStateOf(choices.firstOrNull() ?: PetType.DOG) }
+    var name by remember { mutableStateOf("") }
+    val deadName = vm.respawnNotice?.petName ?: "Your pet"
 
-    // Center item = firstVisible + half-offset correction after snapping.
-    LaunchedEffect(listState) {
-        snapshotFlow {
-            val i = listState.firstVisibleItemIndex
-            val off = listState.firstVisibleItemScrollOffset
-            if (off > with(listState.layoutInfo) { (visibleItemsInfo.firstOrNull()?.size ?: 1) / 2 }) i + 1 else i
-        }.distinctUntilChanged().collect { idx ->
-            values.getOrNull(idx)?.let(onSelected)
+    Column(
+        Modifier.fillMaxSize().background(Brutal.Cream)
+            .verticalScroll(rememberScrollState()).padding(28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(Modifier.height(8.dp))
+        Box(Modifier.size(72.dp).brutal(fill = Brutal.Pink, corner = 36.dp),
+            contentAlignment = Alignment.Center) {
+            Text("\uD83D\uDC94", fontSize = 30.sp)
         }
-    }
+        Spacer(Modifier.height(16.dp))
+        Text("$deadName has passed away", fontFamily = Brutal.UiFont,
+            fontWeight = FontWeight.Bold, fontSize = 22.sp, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            if (ownsOthers)
+                "Your coins and items are safe. Choose one of your other companions to continue with."
+            else
+                "Your coins and items are safe. Hatch a new companion to continue your journey.",
+            fontFamily = Brutal.MonoFont, fontSize = 11.sp, textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(24.dp))
 
-    Box(modifier.height((ROW_HEIGHT_DP * 5).dp), contentAlignment = Alignment.Center) {
-        LazyColumn(
-            state = listState,
-            flingBehavior = fling,
-            modifier = Modifier.fillMaxSize(),
-            // Pad by 2 rows so first/last values can reach the center line.
-            contentPadding = PaddingValues(vertical = (ROW_HEIGHT_DP * 2).dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            items(values.size) { i ->
-                val v = values[i]
-                val isSel = v == selected
-                Box(Modifier.height(ROW_HEIGHT_DP.dp), contentAlignment = Alignment.Center) {
-                    if (isSel) {
-                        Box(
-                            Modifier
-                                .padding(horizontal = 40.dp)
-                                .brutal(fill = Brutal.Cream, corner = 8.dp, stroke = 3.dp, shadowOffset = 3.dp)
-                                .padding(horizontal = 24.dp, vertical = 6.dp)
-                        ) {
-                            Text(format(v), fontFamily = Brutal.MonoFont, fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold, color = Brutal.Ink)
+        Text(if (ownsOthers) "Choose a Pet" else "Choose Your New Egg",
+            fontFamily = Brutal.UiFont, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Spacer(Modifier.height(16.dp))
+
+        val eggFill = mapOf(
+            PetType.DOG to Brutal.Yellow, PetType.CAT to Brutal.Mint,
+            PetType.CAPYBARA to Brutal.Pink, PetType.RABBIT to Color(0xFFD9D9D9),
+            PetType.DRAGON to Brutal.Mint
+        )
+        choices.chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                row.forEach { pet ->
+                    val sel = selected == pet
+                    Column(
+                        Modifier.weight(1f)
+                            .brutal(fill = if (sel) Brutal.Yellow else Brutal.White, corner = 14.dp)
+                            .clickable(remember { MutableInteractionSource() }, null) { selected = pet }
+                            .padding(vertical = 18.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(Modifier.size(64.dp)
+                            .background(eggFill[pet] ?: Brutal.White, CircleShape),
+                            contentAlignment = Alignment.Center) {
+                            // Owned pets show their sprite; fresh hatches show the egg.
+                            if (ownsOthers) AssetImage("${pet.name.lowercase()}.png", Modifier.size(48.dp))
+                            else AssetImage(Assets.egg(pet), Modifier.size(44.dp))
                         }
-                    } else {
-                        Text(
-                            format(v), fontFamily = Brutal.MonoFont, fontSize = 18.sp,
-                            color = Brutal.Ink.copy(alpha = 0.30f)
-                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(pet.label, fontFamily = Brutal.UiFont,
+                            fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Spacer(Modifier.height(6.dp))
+                        BrutalPill(pet.trait, fill = Brutal.White, fontSize = 9)
                     }
                 }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
             }
         }
-        // Fixed black selection arrow on the left, pointing at the center row.
-        Canvas(Modifier.align(Alignment.CenterStart).padding(start = 10.dp).size(16.dp)) {
-            val p = Path().apply {
-                moveTo(0f, 0f); lineTo(size.width, size.height / 2f); lineTo(0f, size.height); close()
-            }
-            drawPath(p, Brutal.Ink)
-        }
-    }
-}
+        Spacer(Modifier.height(20.dp))
 
-@Composable
-private fun rememberTickSync(
-    listState: LazyListState,
-    ticks: List<Double>,
-    onTick: (Double) -> Unit
-) {
-    LaunchedEffect(listState, ticks) {
-        snapshotFlow {
-            val info = listState.layoutInfo
-            val center = (info.viewportStartOffset + info.viewportEndOffset) / 2
-            info.visibleItemsInfo.minByOrNull {
-                kotlin.math.abs((it.offset + it.size / 2) - center)
-            }?.index
-        }.distinctUntilChanged().collect { idx ->
-            if (idx != null) ticks.getOrNull(idx)?.let(onTick)
+        Text("Name your ${selected.label}:", fontFamily = Brutal.MonoFont, fontSize = 12.sp)
+        Spacer(Modifier.height(10.dp))
+        Box(Modifier.fillMaxWidth().brutal(fill = Brutal.White, corner = 10.dp).padding(14.dp)) {
+            BasicTextField(
+                value = name, onValueChange = { if (it.length <= 14) name = it },
+                textStyle = TextStyle(fontFamily = Brutal.UiFont, fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
+                singleLine = true, modifier = Modifier.fillMaxWidth()
+            )
+            if (name.isEmpty()) Text("Sparky", fontFamily = Brutal.UiFont, fontSize = 18.sp,
+                color = Brutal.Ink.copy(alpha = 0.3f), fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.Center))
         }
-    }
-}
+        Spacer(Modifier.height(20.dp))
 
-@Composable
-private fun SyncRulerToValue(
-    listState: LazyListState,
-    ticks: List<Double>,
-    step: Double,
-    value: Double,
-    lastEmitted: () -> Double,
-    markSynced: (Double) -> Unit
-) {
-    LaunchedEffect(value, ticks) {
-        if (kotlin.math.abs(value - lastEmitted()) > step / 2) {
-            val idx = ticks.indices.minByOrNull { kotlin.math.abs(ticks[it] - value) }
-                ?: return@LaunchedEffect
-            markSynced(ticks[idx])
-            listState.scrollToItem(idx) // instant jump to the typed value
+        BrutalButton("CONTINUE \u2192", fill = Brutal.Mint, modifier = Modifier.fillMaxWidth()) {
+            vm.respawnAs(selected, name)
         }
-    }
-}
-
-@Composable
-fun HorizontalRuler(
-    min: Double, max: Double, step: Double,
-    value: Double,
-    onValue: (Double) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val ticks = remember(min, max, step) {
-        generateSequence(min) { it + step }.takeWhile { it <= max + 1e-9 }.toList()
-    }
-    val startIdx = remember(ticks, value) {
-        ticks.indices.minByOrNull { kotlin.math.abs(ticks[it] - value) } ?: 0
-    }
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = startIdx)
-    val fling = rememberSnapFlingBehavior(lazyListState = listState)
-    var lastEmitted by remember { mutableStateOf(value) }
-    rememberTickSync(listState, ticks) { tick -> lastEmitted = tick; onValue(tick) }
-    SyncRulerToValue(listState, ticks, step, value, { lastEmitted }, { lastEmitted = it })
-
-    Box(modifier.height(90.dp), contentAlignment = Alignment.Center) {
-        LazyRow(
-            state = listState, flingBehavior = fling,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 150.dp),
-            verticalAlignment = Alignment.Bottom
-        ) {
-            items(ticks.size) { i ->
-                val major = i % 5 == 0
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (major) Text(
-                        "${ticks[i].toInt()}", fontFamily = Brutal.MonoFont,
-                        fontSize = 10.sp, color = Brutal.Ink
-                    )
-                    Canvas(Modifier.width(12.dp).height(if (major) 40.dp else 24.dp)) {
-                        drawLine(
-                            Brutal.Ink,
-                            Offset(size.width / 2, 0f),
-                            Offset(size.width / 2, size.height),
-                            strokeWidth = if (major) 6f else 3f
-                        )
-                    }
-                }
-            }
-        }
-        // Fixed red-triangle style indicator (black per design) above center.
-        Canvas(Modifier.align(Alignment.TopCenter).size(18.dp)) {
-            val p = Path().apply {
-                moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width / 2f, size.height); close()
-            }
-            drawPath(p, Brutal.Pink)
-        }
-    }
-}
-
-@Composable
-fun VerticalRuler(
-    min: Double, max: Double, step: Double,
-    value: Double,
-    onValue: (Double) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // Descending so bigger numbers sit at the top like a wall chart.
-    val ticks = remember(min, max, step) {
-        generateSequence(max) { it - step }.takeWhile { it >= min - 1e-9 }.toList()
-    }
-    val startIdx = remember(ticks, value) {
-        ticks.indices.minByOrNull { kotlin.math.abs(ticks[it] - value) } ?: 0
-    }
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = startIdx)
-    val fling = rememberSnapFlingBehavior(lazyListState = listState)
-    var lastEmitted by remember { mutableStateOf(value) }
-    rememberTickSync(listState, ticks) { tick -> lastEmitted = tick; onValue(tick) }
-    SyncRulerToValue(listState, ticks, step, value, { lastEmitted }, { lastEmitted = it })
-
-    Box(modifier.width(120.dp).height(240.dp), contentAlignment = Alignment.Center) {
-        LazyColumn(
-            state = listState, flingBehavior = fling,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(vertical = 110.dp),
-            horizontalAlignment = Alignment.End
-        ) {
-            items(ticks.size) { i ->
-                val major = i % 5 == 0
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (major) Text(
-                        "${ticks[i].toInt()} ", fontFamily = Brutal.MonoFont,
-                        fontSize = 10.sp, color = Brutal.Ink
-                    )
-                    Canvas(Modifier.height(12.dp).width(if (major) 40.dp else 24.dp)) {
-                        drawLine(
-                            Brutal.Ink,
-                            Offset(0f, size.height / 2),
-                            Offset(size.width, size.height / 2),
-                            strokeWidth = if (major) 6f else 3f
-                        )
-                    }
-                }
-            }
-        }
-        // Fixed arrow at center-left pointing right at the selected tick.
-        Canvas(Modifier.align(Alignment.CenterStart).size(14.dp)) {
-            val p = Path().apply {
-                moveTo(0f, 0f); lineTo(size.width, size.height / 2f); lineTo(0f, size.height); close()
-            }
-            drawPath(p, Brutal.Mint)
-        }
+        Spacer(Modifier.height(24.dp))
     }
 }
